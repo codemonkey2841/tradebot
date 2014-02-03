@@ -1,0 +1,2 @@
+git+ssh://git@github.com/alanmcintyre/btce-api.git
+configparser==3.3.0r2
