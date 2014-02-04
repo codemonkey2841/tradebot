@@ -241,7 +241,7 @@ class TradeBot(object):
         cursor.execute("SELECT COUNT(*) FROM prices WHERE timestamp > ?",
                        (delta,))
         row = cursor.fetchone()
-        if row[0] < 20:
+        if row[0] < 19:
             return ("build", price)
         cursor.execute("SELECT type, rate FROM trades WHERE pair = ? AND " \
             "is_sim = ? ORDER BY timestamp DESC LIMIT 1 ",
