@@ -134,17 +134,41 @@ class TradeBot(object):
              'rate': price,
              'timestamp_created': time.time(),
              'status': 1})
+        self.insert_trade(order)
+
+    def insert_trade(self, trade):
         cursor = self.database.cursor()
-        cursor.execute('INSERT INTO trades (order_id, pair, type, amount, ' \
-            'rate, timestamp, status, is_sim) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (order.order_id,
-             order.pair,
-             order.type,
-             order.amount,
-             order.rate,
-             order.timestamp_created,
-             order.status,
-             self.simulation))
+        cursor.execute('SELECT Id FROM trades WHERE order_id = ?',
+            (trade.order_id,))
+        result = cursor.fetchone()
+        timestamp = 0
+        if hasattr(trade, 'timestamp'):
+            timestamp = trade.timestamp
+        elif hasattr(trade, 'timestamp_created'):
+            timestamp = trade.timestamp_created
+        if result and not self.simulation:
+            cursor.execute('UPDATE trades SET pair = ?, type = ?, amount = ' \
+                '?, rate = ?, timestamp = ?, status = ?, is_sim = ? WHERE ' \
+                'order_id = ?',
+                 (trade.pair,
+                 trade.type,
+                 trade.amount,
+                 trade.rate,
+                 timestamp,
+                 trade.status,
+                 self.simulation,
+                 trade.order_id))
+        else:
+            cursor.execute('INSERT INTO trades (order_id, pair, type, amount, ' \
+                'rate, timestamp, status, is_sim) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                (trade.order_id,
+                 trade.pair,
+                 trade.type,
+                 trade.amount,
+                 trade.rate,
+                 timestamp,
+                 trade.status,
+                 self.simulation))
         self.database.commit()
 
     def check_if_changed(self):
@@ -214,7 +238,7 @@ class TradeBot(object):
         pair = "%s_%s" % (self.curr[0], self.curr[1])
         last = public.getTicker(pair).last
         cursor = self.database.cursor()
-        self.log.debug("INSERTING price (%f, %s, %f)",
+        self.log.debug("Inserting price (%f, %s, %f)",
                         last,
                         pair,
                         time.time())
@@ -251,17 +275,16 @@ class TradeBot(object):
             last = row[0]
             price = row[1]
         else:
-            cursor.execute("INSERT INTO trades (order_id, pair, type, " \
-                "amount, rate, timestamp, status, is_sim) VALUES (?, " \
-                "?, ?, ?, ?, ?, ?, ?)",
-                (-1,
-                '%s_%s' % (self.curr[0], self.curr[1]),
-                '',
-                0,
-                price,
-                time.time(),
-                1,
-                self.simulation))
+            info = {
+                "order_id": -1,
+                "pair": "%s_%s" % (self.curr[0], self.curr[1]),
+                "type": "",
+                "amount": 0,
+                "rate": price,
+                "timestamp": time.mktime(datetime.datetime.strptime(row[6],
+                    '%Y-%m-%d %H:%M:%S.%f').timetuple()),
+                "status": 1}
+            self.insert_trade(trade.TradeHistoryItem(-1, info))
             self.database.commit()
 
         if self.get_balance(1) <= 0.0:
