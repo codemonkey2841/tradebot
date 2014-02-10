@@ -353,12 +353,10 @@ class TradeBot(object):
         orders = self.api.activeOrders(pair='%s_%s' % (self.curr[0],
                                                        self.curr[1]))
         for order in orders:
-            #order.timestamp_created -= timedelta(hours=15)
             self.insert_order(order)
 
         trades = self.api.tradeHistory()
         for item in trades:
-            #item.timestamp -= timedelta(hours=15)
             self.log.debug(item.timestamp)
             self.insert_trade(item)
 
