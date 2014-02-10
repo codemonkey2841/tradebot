@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """ It's Tradebot! """
-import datetime
+
+from datetime import datetime, timedelta
 import logging
 from btceapi import trade
 from btceapi import keyhandler
@@ -14,7 +15,6 @@ LIST_SIZE = 20
 
 class TradeBot(object):
     """ The TradeBot class """
-
     api = None
     balance = [0.0, 0.0]
     curr = []
@@ -45,7 +45,6 @@ class TradeBot(object):
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
         self.log.debug('Tradebot initiated.')
-
         self.api = trade.TradeAPI(args['api_key'],
                                   keyhandler.KeyHandler(args['api_file']))
         self.trade_threshold = args['trade_threshold']
@@ -53,7 +52,7 @@ class TradeBot(object):
         self.wait = args['wait']
         self.trade_increment = args['trade_increment']
         self.update_balance()
-        if args['simulation'] == "on":
+        if args['simulation'] == 'on':
             self.simulation = True
         self.database = sqlite3.connect(args['db'])
         self.initialize_db()
@@ -61,19 +60,20 @@ class TradeBot(object):
     def revert_on_cancel(self):
         """ Reverts last state on a cancel """
         cursor = self.database.cursor()
-        cursor.execute("DELETE FROM trades ORDER BY timestamp DESC LIMIT 1")
+        cursor.execute('DELETE FROM trades ORDER BY timestamp DESC LIMIT 1')
         self.database.commit()
 
     def get_price_history(self, count=20):
         """ Gets the last trade price from btc-e """
         cursor = self.database.cursor()
-        cursor.execute("SELECT price FROM prices ORDER BY timestamp DESC " \
-            "LIMIT ?", (count,))
+        cursor.execute('SELECT price FROM prices ORDER BY timestamp DESC ' \
+            'LIMIT ?', (count,))
         rows = cursor.fetchall()
         if rows != None:
             temp = []
             for row in rows:
                 temp.append(row[0])
+
             return temp
         else:
             return list(0)
@@ -82,10 +82,9 @@ class TradeBot(object):
         """ Sets current price by averaging last LIST_SIZE results of
         get_last """
         cursor = self.database.cursor()
-        delta = time.time() - (20 * self.wait)
-        self.log.debug("Average price for prices since %f", delta)
-        cursor.execute("SELECT avg(price) FROM prices WHERE timestamp > ?",
-            (time.time() - (20 * self.wait),))
+        delta = datetime.now() - timedelta(seconds=(20*self.wait))
+        cursor.execute('SELECT avg(price) FROM prices WHERE timestamp > ?',
+            (delta,))
         row = cursor.fetchone()
         if row != None:
             if row[0] != None:
@@ -98,7 +97,6 @@ class TradeBot(object):
 
     def update_balance(self):
         """ Update the balances of the primary currencies """
-
         if not self.simulation:
             account_info = vars(self.api.getInfo())
             self.balance[0] = float(account_info['balance_%s' % self.curr[0]])
@@ -119,8 +117,13 @@ class TradeBot(object):
                                     action,
                                     ceil(price * 100000) / 100000.0,
                                     trade_cost)
-            order = self.api.tradeHistory(from_id=result.order_id,
-                                          end_id=result.order_id)
+            order = trade.OrderItem(order_id=result.order_id, info={
+                'pair': pair,
+                'type': action,
+                'amount': trade_cost,
+                'rate': price,
+                'timestamp_created': float(datetime.utcnow().strftime("%s")),
+                'status': 1})
         else:
             if action == 'buy':
                 self.balance[0] += trade_cost
@@ -132,43 +135,68 @@ class TradeBot(object):
              'type': action,
              'amount': trade_cost,
              'rate': price,
-             'timestamp_created': time.time(),
-             'status': 1})
-        self.insert_trade(order)
+             'timestamp_created': float(datetime.utcnow().strftime("%s")),
+             'status': 0})
+        self.insert_order(order)
 
-    def insert_trade(self, trade):
+    def insert_order(self, order):
+        """ Insert an order into the database. """
         cursor = self.database.cursor()
-        cursor.execute('SELECT Id FROM trades WHERE order_id = ?',
-            (trade.order_id,))
+        cursor.execute('SELECT Id FROM orders WHERE Id = ?', (order.order_id,))
         result = cursor.fetchone()
-        timestamp = 0
-        if hasattr(trade, 'timestamp'):
-            timestamp = trade.timestamp
-        elif hasattr(trade, 'timestamp_created'):
-            timestamp = trade.timestamp_created
         if result and not self.simulation:
-            cursor.execute('UPDATE trades SET pair = ?, type = ?, amount = ' \
-                '?, rate = ?, timestamp = ?, status = ?, is_sim = ? WHERE ' \
-                'order_id = ?',
-                 (trade.pair,
-                 trade.type,
-                 trade.amount,
-                 trade.rate,
-                 timestamp,
-                 trade.status,
-                 self.simulation,
-                 trade.order_id))
+            cursor.execute('UPDATE orders SET pair = ?, type = ?, amount = ' \
+                '?, rate = ?, timestamp_created = ?, status = ?, is_sim = ' \
+                '? WHERE Id = ?', (order.pair,
+                                   order.type,
+                                   order.amount,
+                                   order.rate,
+                                   order.timestamp_created,
+                                   order.status,
+                                   self.simulation,
+                                   order.order_id))
         else:
-            cursor.execute('INSERT INTO trades (order_id, pair, type, amount, ' \
-                'rate, timestamp, status, is_sim) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-                (trade.order_id,
-                 trade.pair,
-                 trade.type,
-                 trade.amount,
-                 trade.rate,
-                 timestamp,
-                 trade.status,
-                 self.simulation))
+            cursor.execute('INSERT INTO orders (Id, pair, type, amount, ' \
+                'rate, timestamp_created, status, is_sim) VALUES (?, ?, ?, ' \
+                '?, ?, ?, ?, ?)', (order.order_id,
+                                   order.pair,
+                                   order.type,
+                                   order.amount,
+                                   order.rate,
+                                   order.timestamp_created,
+                                   order.status,
+                                   self.simulation))
+        self.database.commit()
+
+    def insert_trade(self, item):
+        """ Insert a trade into the database. """
+        cursor = self.database.cursor()
+        cursor.execute('SELECT Id FROM trades WHERE order_id = ? AND ' \
+            'amount = ? AND rate = ?', (int(item.order_id),
+                                        float(item.amount),
+                                        float(item.rate)))
+        result = cursor.fetchone()
+        if result and not self.simulation:
+            cursor.execute('UPDATE trades SET pair = ?, type = ?, amount ' \
+                '= ?, rate = ?, timestamp = ?, is_sim = ?, order_id = ? ' \
+                'WHERE Id = ?', (item.pair,
+                                 item.type,
+                                 float(item.amount),
+                                 float(item.rate),
+                                 item.timestamp,
+                                 self.simulation,
+                                 int(item.order_id),
+                                 result[0]))
+        else:
+            cursor.execute('INSERT INTO trades (order_id, pair, type, ' \
+                'amount, rate, timestamp, is_sim) VALUES (?, ?, ?, ?, ?, ' \
+                '?, ?)', (int(item.order_id),
+                          item.pair,
+                          item.type,
+                          float(item.amount),
+                          float(item.rate),
+                          item.timestamp,
+                          self.simulation))
         self.database.commit()
 
     def check_if_changed(self):
@@ -206,7 +234,7 @@ class TradeBot(object):
         if self.simulation:
             return
         order_timeout = self.wait * 20
-        current_time = datetime.datetime.now()
+        current_time = datetime.utcnow()
         pair = '%s_%s' % (self.curr[0], self.curr[1])
         orders = self.api.activeOrders(pair=pair)
         if not orders:
@@ -235,15 +263,17 @@ class TradeBot(object):
     def update_price(self):
         """ Get the current price via the API and insert it into the
         database """
-        pair = "%s_%s" % (self.curr[0], self.curr[1])
+        pair = '%s_%s' % (self.curr[0], self.curr[1])
         last = public.getTicker(pair).last
         cursor = self.database.cursor()
-        self.log.debug("Inserting price (%f, %s, %f)",
-                        last,
-                        pair,
-                        time.time())
-        cursor.execute("INSERT INTO prices (price, pair, timestamp) VALUES " \
-            "(%f, ?, ?)" % last, (pair, time.time(),))
+        self.log.debug('Inserting price (%f, %s, %f)',
+                       last,
+                       pair,
+                       datetime.utcnow())
+        cursor.execute('INSERT INTO prices (price, pair, timestamp) ' \
+            'VALUES (?, ?, ?)', (float(last),
+                                 pair,
+                                 datetime.now()))
         self.database.commit()
 
     def get_trade_cost(self):
@@ -261,32 +291,27 @@ class TradeBot(object):
         last = ''
         price = self.average_price()
         cursor = self.database.cursor()
-        delta = time.time() - (20 * self.wait)
-        cursor.execute("SELECT COUNT(*) FROM prices WHERE timestamp > ?",
-                       (delta,))
+        delta = datetime.now() - timedelta(seconds=(20*self.wait))
+        cursor.execute('SELECT COUNT(*) FROM prices WHERE timestamp > ?',
+            (delta,))
         row = cursor.fetchone()
-        if row[0] < 19:
-            return ("build", price)
-        cursor.execute("SELECT type, rate FROM trades WHERE pair = ? AND " \
-            "is_sim = ? ORDER BY timestamp DESC LIMIT 1 ",
+        if row[0] < 15:
+            return ('build', price)
+        cursor.execute('SELECT type, rate FROM orders WHERE pair = ? AND ' \
+            'is_sim = ? ORDER BY timestamp_created DESC LIMIT 1 ',
             ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation))
         row = cursor.fetchone()
         if row != None:
             last = row[0]
             price = row[1]
         else:
-            info = {
-                "order_id": -1,
-                "pair": "%s_%s" % (self.curr[0], self.curr[1]),
-                "type": "",
-                "amount": 0,
-                "rate": price,
-                "timestamp": time.mktime(datetime.datetime.strptime(row[6],
-                    '%Y-%m-%d %H:%M:%S.%f').timetuple()),
-                "status": 1}
-            self.insert_trade(trade.TradeHistoryItem(-1, info))
+            info = {'pair': '%s_%s' % (self.curr[0], self.curr[1]),
+             'type': '',
+             'amount': 0,
+             'rate': price,
+             'timestamp_created': float(datetime.utcnow().strftime("%s"))}
+            self.insert_order(trade.OrderItem(-1, info))
             self.database.commit()
-
         if self.get_balance(1) <= 0.0:
             state = 'buy'
             price -= price * self.trade_threshold
@@ -303,40 +328,71 @@ class TradeBot(object):
 
     def get_orders(self):
         """ Retrieve active orders """
-        return []
+        cursor = self.database.cursor()
+        cursor.execute('SELECT Id, pair, type, amount, rate, ' \
+            'timestamp_created FROM orders WHERE status = 0 AND pair = ? ' \
+            'AND is_sim = ? AND type != '' ORDER BY timestamp_created DESC',
+            ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation))
+        result = cursor.fetchall()
+        history = []
+        for row in result:
+            info = {'pair': row[1],
+                    'type': row[2],
+                    'amount': row[3],
+                    'rate': row[4],
+                    'timestamp_created': time.mktime(datetime.strptime(row[6],
+                        '%Y-%m-%d %H:%M:%S').timetuple())}
+            history.append(trade.OrderItem(row[0], info))
+
+        return history
 
     def update_trades(self):
         """ Update state of trades via API """
-        pass
+        if self.simulation:
+            return
+        orders = self.api.activeOrders(pair='%s_%s' % (self.curr[0],
+                                                       self.curr[1]))
+        for order in orders:
+            #order.timestamp_created -= timedelta(hours=15)
+            self.insert_order(order)
+
+        trades = self.api.tradeHistory()
+        for item in trades:
+            #item.timestamp -= timedelta(hours=15)
+            self.log.debug(item.timestamp)
+            self.insert_trade(item)
 
     def get_trade_history(self, count=5):
         """ Get trade history for active pair """
         cursor = self.database.cursor()
-        cursor.execute("SELECT Id, order_id, pair, type, amount, rate, " \
-            "timestamp FROM trades WHERE status = 1 AND pair = ? AND " \
-            "is_sim = ? AND type != '' ORDER BY timestamp DESC LIMIT ?",
-            ("%s_%s" % (self.curr[0], self.curr[1]), self.simulation, count))
+        cursor.execute('SELECT Id, order_id, pair, type, amount, rate, ' \
+            'timestamp FROM trades WHERE pair = ? AND is_sim = ? AND type ' \
+            '!= '' ORDER BY timestamp DESC LIMIT ?',
+            ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation, count))
         result = cursor.fetchall()
         history = []
         for row in result:
-            info = {
-                "order_id": row[1],
-                "pair": row[2],
-                "type": row[3],
-                "amount": row[4],
-                "rate": row[5],
-                "timestamp": time.mktime(datetime.datetime.strptime(row[6],
-                    '%Y-%m-%d %H:%M:%S.%f').timetuple())}
+            info = {'order_id': row[1],
+             'pair': row[2],
+             'type': row[3],
+             'amount': row[4],
+             'rate': row[5],
+             'timestamp': time.mktime(datetime.strptime(row[6],
+                '%Y-%m-%d %H:%M:%S').timetuple())}
             history.append(trade.TradeHistoryItem(row[0], info))
+
         return history
 
     def initialize_db(self):
         """ Initialize tables in database if they don't exist. """
         cursor = self.database.cursor()
-        cursor.execute("CREATE TABLE IF NOT EXISTS trades(Id INTEGER PRIMARY " \
-            "KEY AUTOINCREMENT, order_id INTEGER, pair TEXT, type TEXT, " \
-            "amount REAL, rate REAL, timestamp REAL, status TEXT, is_sim " \
-            "INTEGER)")
-        cursor.execute("CREATE TABLE IF NOT EXISTS prices(Id INTEGER PRIMARY " \
-            "KEY AUTOINCREMENT, price REAL, pair TEXT, timestamp REAL)")
+        cursor.execute('CREATE TABLE IF NOT EXISTS trades(Id INTEGER ' \
+            'PRIMARY KEY AUTOINCREMENT, order_id INTEGER, pair TEXT, type ' \
+            'TEXT, amount REAL, rate REAL, timestamp REAL, is_sim INTEGER)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS orders(Id INTEGER ' \
+            'PRIMARY KEY AUTOINCREMENT, type TEXT, amount REAL, rate REAL, ' \
+            'timestamp_created REAL, status TEXT, pair TEXT, is_sim INTERGER)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS prices(Id INTEGER ' \
+            'PRIMARY KEY AUTOINCREMENT, price REAL, pair TEXT, timestamp ' \
+            'REAL)')
         self.database.commit()
