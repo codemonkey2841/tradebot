@@ -7,7 +7,7 @@ import logging
 from btceapi import trade
 from btceapi import keyhandler
 from btceapi import public
-from math import ceil
+from math import floor
 import sqlite3
 import time
 
@@ -56,12 +56,6 @@ class TradeBot(object):
             self.simulation = True
         self.database = sqlite3.connect(args['db'])
         self.initialize_db()
-
-    def revert_on_cancel(self):
-        """ Reverts last state on a cancel """
-        cursor = self.database.cursor()
-        cursor.execute('DELETE FROM trades ORDER BY timestamp DESC LIMIT 1')
-        self.database.commit()
 
     def get_price_history(self, count=20):
         """ Gets the last trade price from btc-e """
@@ -115,14 +109,14 @@ class TradeBot(object):
         if not self.simulation:
             result = self.api.trade(pair,
                                     action,
-                                    ceil(price * 100000) / 100000.0,
+                                    floor(price * 100000) / 100000.0,
                                     trade_cost)
             order = trade.OrderItem(order_id=result.order_id, info={
                 'pair': pair,
                 'type': action,
                 'amount': trade_cost,
                 'rate': price,
-                'timestamp_created': float(datetime.utcnow().strftime("%s")),
+                'timestamp_created': float(datetime.now().strftime("%s")),
                 'status': 1})
         else:
             if action == 'buy':
@@ -135,7 +129,7 @@ class TradeBot(object):
              'type': action,
              'amount': trade_cost,
              'rate': price,
-             'timestamp_created': float(datetime.utcnow().strftime("%s")),
+             'timestamp_created': float(datetime.now().strftime("%s")),
              'status': 0})
         self.insert_order(order)
 
@@ -149,10 +143,10 @@ class TradeBot(object):
                 '?, rate = ?, timestamp_created = ?, status = ?, is_sim = ' \
                 '? WHERE Id = ?', (order.pair,
                                    order.type,
-                                   order.amount,
-                                   order.rate,
+                                   float(order.amount),
+                                   float(order.rate),
                                    order.timestamp_created,
-                                   order.status,
+                                   str(order.status),
                                    self.simulation,
                                    order.order_id))
         else:
@@ -161,10 +155,10 @@ class TradeBot(object):
                 '?, ?, ?, ?, ?)', (order.order_id,
                                    order.pair,
                                    order.type,
-                                   order.amount,
-                                   order.rate,
+                                   float(order.amount),
+                                   float(order.rate),
                                    order.timestamp_created,
-                                   order.status,
+                                   str(order.status),
                                    self.simulation))
         self.database.commit()
 
@@ -234,7 +228,7 @@ class TradeBot(object):
         if self.simulation:
             return
         order_timeout = self.wait * 20
-        current_time = datetime.utcnow()
+        current_time = datetime.now()
         pair = '%s_%s' % (self.curr[0], self.curr[1])
         orders = self.api.activeOrders(pair=pair)
         if not orders:
@@ -246,18 +240,20 @@ class TradeBot(object):
             order_ages.append([order.order_id,
                                current_time - order.timestamp_created])
 
+        cursor = self.database.cursor()
         for order in order_ages:
             if order[1].seconds > order_timeout:
                 self.log.info('Cancelling %s', order[0])
                 self.api.cancelOrder(order[0])
-            self.revert_on_cancel()
+                cursor.execute('DELETE FROM orders WHERE Id = ?', order[0])
+        self.database.commit()
 
     def refresh_price(self):
         """ Refreshes prices """
         self.update_price()
         self.update_balance()
         self.update_trades()
-        self.autocancel()
+        #self.autocancel()
         self.check_if_changed()
 
     def update_price(self):
@@ -269,7 +265,7 @@ class TradeBot(object):
         self.log.debug('Inserting price (%f, %s, %f)',
                        last,
                        pair,
-                       datetime.utcnow())
+                       datetime.now())
         cursor.execute('INSERT INTO prices (price, pair, timestamp) ' \
             'VALUES (?, ?, ?)', (float(last),
                                  pair,
@@ -298,8 +294,9 @@ class TradeBot(object):
         if row[0] < 15:
             return ('build', price)
         cursor.execute('SELECT type, rate FROM orders WHERE pair = ? AND ' \
-            'is_sim = ? ORDER BY timestamp_created DESC LIMIT 1 ',
-            ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation))
+            'is_sim = ? AND status != -1 ORDER BY timestamp_created DESC ' \
+            'LIMIT 1 ', ('%s_%s' % (self.curr[0], self.curr[1]),
+            self.simulation))
         row = cursor.fetchone()
         if row != None:
             last = row[0]
@@ -309,7 +306,7 @@ class TradeBot(object):
              'type': '',
              'amount': 0,
              'rate': price,
-             'timestamp_created': float(datetime.utcnow().strftime("%s"))}
+             'timestamp_created': float(datetime.now().strftime("%s"))}
             self.insert_order(trade.OrderItem(-1, info))
             self.database.commit()
         if self.get_balance(1) <= 0.0:
@@ -331,7 +328,7 @@ class TradeBot(object):
         cursor = self.database.cursor()
         cursor.execute('SELECT Id, pair, type, amount, rate, ' \
             'timestamp_created FROM orders WHERE status = 0 AND pair = ? ' \
-            'AND is_sim = ? AND type != '' ORDER BY timestamp_created DESC',
+            'AND is_sim = ? AND type != "" ORDER BY timestamp_created DESC',
             ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation))
         result = cursor.fetchall()
         history = []
@@ -340,7 +337,7 @@ class TradeBot(object):
                     'type': row[2],
                     'amount': row[3],
                     'rate': row[4],
-                    'timestamp_created': time.mktime(datetime.strptime(row[6],
+                    'timestamp_created': time.mktime(datetime.strptime(row[5],
                         '%Y-%m-%d %H:%M:%S').timetuple())}
             history.append(trade.OrderItem(row[0], info))
 
@@ -352,8 +349,22 @@ class TradeBot(object):
             return
         orders = self.api.activeOrders(pair='%s_%s' % (self.curr[0],
                                                        self.curr[1]))
+
+        orderstr = '('
+        orderid = []
         for order in orders:
+            orderstr += '?,'
+            orderid.append(order.order_id)
             self.insert_order(order)
+        orderstr = orderstr[:-1] + ')'
+
+        cursor = self.database.cursor()
+        if len(orderid) > 0:
+            cursor.execute('UPDATE orders SET status = 1 WHERE Id NOT IN ' \
+                '%s AND status = 0;' % orderstr, orderid)
+        else:
+            cursor.execute('UPDATE orders SET status = 1 WHERE status = 0')
+        self.database.commit()
 
         trades = self.api.tradeHistory()
         for item in trades:
@@ -365,7 +376,7 @@ class TradeBot(object):
         cursor = self.database.cursor()
         cursor.execute('SELECT Id, order_id, pair, type, amount, rate, ' \
             'timestamp FROM trades WHERE pair = ? AND is_sim = ? AND type ' \
-            '!= '' ORDER BY timestamp DESC LIMIT ?',
+            '!= "" ORDER BY timestamp DESC LIMIT ?',
             ('%s_%s' % (self.curr[0], self.curr[1]), self.simulation, count))
         result = cursor.fetchall()
         history = []
