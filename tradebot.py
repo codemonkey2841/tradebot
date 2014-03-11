@@ -4,9 +4,8 @@
 
 from datetime import datetime, timedelta
 import logging
-from btceapi import trade
-from btceapi import keyhandler
-from btceapi import public
+from btceapi import trade, keyhandler, public
+from btceapi.common import InvalidTradeAmountException
 from math import floor
 import sqlite3
 import time
@@ -119,12 +118,20 @@ class TradeBot(object):
                 'timestamp_created': float(datetime.now().strftime("%s")),
                 'status': 1})
         else:
+            adj_cost = floor(trade_cost * price * 100000) / 100000.0
+            trade_fee = 1.002
             if action == 'buy':
-                self.balance[0] += trade_cost
-                self.balance[1] -= ceil(trade_cost * price * 100000) / 100000.0
+                if trade_fee * adj_cost <= self.balance[1]:
+                    self.balance[0] += trade_cost
+                    self.balance[1] -= trade_fee * adj_cost
+                else:
+                    raise InvalidTradeAmountException
             elif action == 'sell':
-                self.balance[0] -= trade_cost
-                self.balance[1] += ceil(trade_cost * price * 100000) / 100000.0
+                if trade_fee * trade_cost <= self.balance[0]:
+                    self.balance[0] -= trade_fee * trade_cost
+                    self.balance[1] += adj_cost
+                else:
+                    raise InvalidTradeAmountException
             order = trade.OrderItem(order_id=-1, info={'pair': pair,
              'type': action,
              'amount': trade_cost,
@@ -149,6 +156,16 @@ class TradeBot(object):
                                    str(order.status),
                                    self.simulation,
                                    order.order_id))
+        elif self.simulation:
+            cursor.execute('INSERT INTO orders (pair, type, amount, ' \
+                'rate, timestamp_created, status, is_sim) VALUES (?, ?, ?, ' \
+                '?, ?, ?, ?)', (order.pair,
+                                order.type,
+                                float(order.amount),
+                                float(order.rate),
+                                order.timestamp_created,
+                                1,
+                                self.simulation))
         else:
             cursor.execute('INSERT INTO orders (Id, pair, type, amount, ' \
                 'rate, timestamp_created, status, is_sim) VALUES (?, ?, ?, ' \
@@ -262,7 +279,7 @@ class TradeBot(object):
         pair = '%s_%s' % (self.curr[0], self.curr[1])
         last = public.getTicker(pair).last
         cursor = self.database.cursor()
-        self.log.debug('Inserting price (%f, %s, %f)',
+        self.log.debug('Inserting price (%f, %s, %s)',
                        last,
                        pair,
                        datetime.now())
@@ -292,7 +309,7 @@ class TradeBot(object):
             (delta,))
         row = cursor.fetchone()
         if row[0] < 15:
-            return ('build', price)
+            return ('build', floor(price * 100000) / 100000)
         cursor.execute('SELECT type, rate FROM orders WHERE pair = ? AND ' \
             'is_sim = ? AND status != -1 ORDER BY timestamp_created DESC ' \
             'LIMIT 1 ', ('%s_%s' % (self.curr[0], self.curr[1]),
@@ -321,6 +338,7 @@ class TradeBot(object):
         elif last == 'buy':
             state = 'sell'
             price += price * self.trade_threshold
+        price = floor(price * 100000) / 100000.0
         return (state, price)
 
     def get_orders(self):
