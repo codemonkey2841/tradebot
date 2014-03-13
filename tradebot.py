@@ -160,12 +160,12 @@ class TradeBot(object):
             cursor.execute('INSERT INTO orders (pair, type, amount, ' \
                 'rate, timestamp_created, status, is_sim) VALUES (?, ?, ?, ' \
                 '?, ?, ?, ?)', (order.pair,
-                                order.type,
-                                float(order.amount),
-                                float(order.rate),
-                                order.timestamp_created,
-                                1,
-                                self.simulation))
+                                   order.type,
+                                   float(order.amount),
+                                   float(order.rate),
+                                   order.timestamp_created,
+                                   order.status,
+                                   self.simulation))
         else:
             cursor.execute('INSERT INTO orders (Id, pair, type, amount, ' \
                 'rate, timestamp_created, status, is_sim) VALUES (?, ?, ?, ' \
@@ -310,6 +310,10 @@ class TradeBot(object):
         row = cursor.fetchone()
         if row[0] < 15:
             return ('build', floor(price * 100000) / 100000)
+        cursor.execute('SELECT COUNT(*) FROM orders WHERE status == 0;')
+        row = cursor.fetchone()
+        if row[0] > 0:
+            return('trade', floor(price * 100000) / 100000)
         cursor.execute('SELECT type, rate FROM orders WHERE pair = ? AND ' \
             'is_sim = ? AND status != -1 ORDER BY timestamp_created DESC ' \
             'LIMIT 1 ', ('%s_%s' % (self.curr[0], self.curr[1]),
