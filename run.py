@@ -75,11 +75,11 @@ def update(stdscr):
 
     (state, thresh) = tradebot.get_state()
     if state == "buy":
-        thresh = "< %f" % thresh
+        thresh = "< %0.06f" % thresh
     elif state == "sell":
-        thresh = "> %f" % thresh
+        thresh = "> %0.06f" % thresh
     elif state == "build":
-        thresh = "%f" % thresh
+        thresh = "%0.06f" % thresh
     stdscr.addstr(9, 20, "%s %s" % (thresh, curr2))
     stdscr.addstr(10, 20, "%f %s" % (tradebot.average_price(), curr2))
     stdscr.addstr(5, 12, "%f %s / %f %s"
