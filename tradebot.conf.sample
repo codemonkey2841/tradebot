@@ -1,0 +1,42 @@
+[BTC-E]
+#MUST SET THESE IN ORDER TO HAVE THE BOT WORK
+
+# api_file - This file contains your BTC-e API Key and Secret.
+# You can generate/retrieve these values from your account at
+# http://www.btc-e.com/profile#api_keys
+api_file=btce.conf
+
+# pair - The currency pair you want to trade on.  Values include btc_usd,
+# btc_rur, btc_eur, ltc_btc, ltc_usd, ltc_rur, ltc_eur, nmc_btc, nmc_usd,
+# nvc_btc, nvc_usd, usd_rur, eur_usd, trc_btc, ppc_btc, ppc_usd, ftc_btc,
+# or xpm_btc.
+pair=ltc_btc
+
+[TRADE]
+# increment - Amount of currency traded/bought each transaction.  Measured in 
+# percentage of balance (0.1 = 10% of balance).
+increment=0.012
+
+# threshold - Percent of change in value required to buy/sell.  Default is 
+# 0.6%.  Do not change unless you know what you are doing.
+threshold=0.006
+
+# refresh - How often to refresh in seconds.
+refresh=15
+
+[MAIN]
+# simulation - Whether or not to run the bot in simulation mode.  Simulation
+# mode allows you to tweak the settings without actually making any trades. It
+# will start with your initial balance from the exchange and then modify it
+# locally to simulate trades.  Set to either "on" or "off" (off by default)
+simulation=off
+
+# verbosity - How verbose the logging for the program is. Values include
+# DEBUG, INFO, WARNING, ERROR, or CRITICAL.
+verbosity=WARNING
+
+# logfile - The file to write log entries into.
+logfile=tradebot.log
+
+# dbfile - The SQLite database file to store the bot info into.
+dbfile=tradebot.db
