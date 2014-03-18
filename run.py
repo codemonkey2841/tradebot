@@ -4,10 +4,11 @@
 
 import configparser
 import curses
-import httplib
+from httplib import HTTPException
 import os
 import signal
-import ssl
+import socket
+from ssl import SSLError
 import sys
 import time
 from tradebot import TradeBot
@@ -197,7 +198,7 @@ while True:
         for i in range(tradebot.wait):
             update(stdscr)
             time.sleep(1)
-    except (ssl.SSLError, httplib.HTTPException,ValueError):
+    except (SSLError, HTTPException, ValueError, socket.error):
         curses.start_color()
         curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
         for i in range(60):
