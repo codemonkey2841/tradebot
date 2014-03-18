@@ -56,7 +56,7 @@ class TradeBot(object):
         self.database = sqlite3.connect(args['db'])
         self.initialize_db()
 
-    def get_price_history(self, count=20):
+    def get_price_history(self, count=LIST_SIZE):
         """ Gets the last trade price from btc-e """
         cursor = self.database.cursor()
         cursor.execute('SELECT price FROM prices ORDER BY timestamp DESC ' \
@@ -75,7 +75,7 @@ class TradeBot(object):
         """ Sets current price by averaging last LIST_SIZE results of
         get_last """
         cursor = self.database.cursor()
-        delta = datetime.now() - timedelta(seconds=(20*self.wait))
+        delta = datetime.now() - timedelta(seconds=(LIST_SIZE * self.wait))
         cursor.execute('SELECT avg(price) FROM prices WHERE timestamp > ?',
             (delta,))
         row = cursor.fetchone()
@@ -116,7 +116,7 @@ class TradeBot(object):
                 'amount': trade_cost,
                 'rate': price,
                 'timestamp_created': float(datetime.now().strftime("%s")),
-                'status': 1})
+                'status': 0})
         else:
             adj_cost = floor(trade_cost * price * 100000) / 100000.0
             trade_fee = 1.002
@@ -137,7 +137,7 @@ class TradeBot(object):
              'amount': trade_cost,
              'rate': price,
              'timestamp_created': float(datetime.now().strftime("%s")),
-             'status': 0})
+             'status': 1})
         self.insert_order(order)
 
     def insert_order(self, order):
@@ -244,7 +244,7 @@ class TradeBot(object):
         not complete. """
         if self.simulation:
             return
-        order_timeout = self.wait * 20
+        order_timeout = self.wait * LIST_SIZE
         current_time = datetime.now()
         pair = '%s_%s' % (self.curr[0], self.curr[1])
         orders = self.api.activeOrders(pair=pair)
@@ -270,7 +270,7 @@ class TradeBot(object):
         self.update_price()
         self.update_balance()
         self.update_trades()
-        #self.autocancel()
+        self.autocancel()
         self.check_if_changed()
 
     def update_price(self):
@@ -304,20 +304,24 @@ class TradeBot(object):
         last = ''
         price = self.average_price()
         cursor = self.database.cursor()
-        delta = datetime.now() - timedelta(seconds=(20*self.wait))
+        delta = datetime.now() - timedelta(seconds=(LIST_SIZE * self.wait))
         cursor.execute('SELECT COUNT(*) FROM prices WHERE timestamp > ?',
             (delta,))
         row = cursor.fetchone()
-        if row[0] < 15:
+        if row[0] < 0.75 * LIST_SIZE:
             return ('build', floor(price * 100000) / 100000)
         cursor.execute('SELECT COUNT(*) FROM orders WHERE status == 0;')
         row = cursor.fetchone()
         if row[0] > 0:
             return('trade', floor(price * 100000) / 100000)
+        self.log.debug('SELECT type, rate FROM orders WHERE pair = %s_%s AND ' \
+            'is_sim = %d AND status != -1 ORDER BY timestamp_created DESC ' \
+            'LIMIT 1 ' % (self.curr[0], self.curr[1],
+            self.simulation))
         cursor.execute('SELECT type, rate FROM orders WHERE pair = ? AND ' \
             'is_sim = ? AND status != -1 ORDER BY timestamp_created DESC ' \
             'LIMIT 1 ', ('%s_%s' % (self.curr[0], self.curr[1]),
-            self.simulation))
+            '%d' % self.simulation))
         row = cursor.fetchone()
         if row != None:
             last = row[0]
@@ -327,6 +331,7 @@ class TradeBot(object):
              'type': '',
              'amount': 0,
              'rate': price,
+             'status': 1,
              'timestamp_created': float(datetime.now().strftime("%s"))}
             self.insert_order(trade.OrderItem(-1, info))
             self.database.commit()
