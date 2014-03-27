@@ -11,6 +11,7 @@ import sqlite3
 import time
 
 LIST_SIZE = 20
+TRADE_FEE = 0.002
 
 class TradeBot(object):
     """ The TradeBot class """
@@ -21,7 +22,6 @@ class TradeBot(object):
     log = None
     simulation = False
     trade_increment = None
-    trade_threshold = None
     wait = 15
 
     def __init__(self, args):
@@ -46,7 +46,6 @@ class TradeBot(object):
         self.log.debug('Tradebot initiated.')
         self.api = trade.TradeAPI(args['api_key'],
                                   keyhandler.KeyHandler(args['api_file']))
-        self.trade_threshold = args['trade_threshold']
         self.curr = [args['pair'][:3], args['pair'][4:]]
         self.wait = args['wait']
         self.trade_increment = args['trade_increment']
@@ -337,16 +336,16 @@ class TradeBot(object):
             self.database.commit()
         if self.get_balance(1) <= 0.0:
             state = 'buy'
-            price -= price * self.trade_threshold
+            price -= price * TRADE_FEE
         elif self.get_balance(2) <= 0.0:
             state = 'sell'
-            price += price * self.trade_threshold
+            price += price * TRADE_FEE
         elif last == 'sell' or last == '':
             state = 'buy'
-            price -= price * self.trade_threshold
+            price -= price * TRADE_FEE
         elif last == 'buy':
             state = 'sell'
-            price += price * self.trade_threshold
+            price += price * TRADE_FEE
         price = floor(price * 100000) / 100000.0
         return (state, price)
 

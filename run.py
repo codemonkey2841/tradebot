@@ -96,7 +96,7 @@ def update(stdscr):
     stdscr.addstr(3, 21, "%s" % args['verbosity'][:1])
     stdscr.addstr(3, 30, "%3d" % tradebot.wait)
     stdscr.addstr(3, 41, "%s_%s" % (tradebot.curr[0], tradebot.curr[1]))
-    stdscr.addstr(3, 58, "%.02f%%" % (tradebot.trade_threshold * 100))
+    stdscr.addstr(3, 58, "0.02%")
     stdscr.addstr(3, 72, "%6.02f%%" % (tradebot.trade_increment * 100))
 
     # Price History
@@ -156,10 +156,6 @@ if 'increment' in config['TRADE']:
     args['trade_increment'] = float(config['TRADE']['increment'])
 else:
     args['trade_increment'] = 0.012
-if 'threshold' in config['TRADE']:
-    args['trade_threshold'] = float(config['TRADE']['threshold'])
-else:
-    args['trade_threshold'] = 0.006
 if 'pair' in config['BTC-E']:
     args['pair'] = str(config['BTC-E']['pair'])
 else:
@@ -206,7 +202,7 @@ while True:
                 "in %d" % i, curses.color_pair(1))
     except Exception as e:
         curses.nocbreak()
-        #stdscr.keypad(0)
+        stdscr.keypad(0)
         curses.echo()
         curses.endwin()
         curses.curs_set(1)

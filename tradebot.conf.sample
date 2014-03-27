@@ -17,10 +17,6 @@ pair=ltc_btc
 # percentage of balance (0.1 = 10% of balance).
 increment=0.012
 
-# threshold - Percent of change in value required to buy/sell.  Default is 
-# 0.6%.  Do not change unless you know what you are doing.
-threshold=0.006
-
 # refresh - How often to refresh in seconds.
 refresh=15
 
