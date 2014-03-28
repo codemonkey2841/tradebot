@@ -41,13 +41,11 @@ def initialize():
         stdscr.addstr(i, 81, "|")
 
     # Initialize top bar labels
-    stdscr.addstr(3, 2, "SIM", curses.A_BOLD)
     stdscr.addstr(3, 12, "VERBOSE", curses.A_BOLD)
     stdscr.addstr(3, 24, "WAIT", curses.A_BOLD)
     stdscr.addstr(3, 35, "PAIR", curses.A_BOLD)
     stdscr.addstr(3, 50, "THRESH", curses.A_BOLD)
     stdscr.addstr(3, 65, "TRADE", curses.A_BOLD)
-    stdscr.addstr(3, 6, "[   ]")
     stdscr.addstr(3, 20, "[ ]")
     stdscr.addstr(3, 29, "[   ]")
     stdscr.addstr(3, 40, "[       ]")
@@ -89,10 +87,12 @@ def update(stdscr):
     stdscr.addstr(8, 20, "%f %s" % (tradebot.get_trade_cost(), curr1))
 
     # Top Bar values
-    sim = "OFF"
     if tradebot.simulation:
-        sim = "ON"
-    stdscr.addstr(3, 7, "%3s" % sim)
+        curses.start_color()
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+        stdscr.addstr(1, 2, "SIMULATION", curses.color_pair(1))
+    else:
+        stdscr.addstr(1, 3, "          ")
     stdscr.addstr(3, 21, "%s" % args['verbosity'][:1])
     stdscr.addstr(3, 30, "%3d" % tradebot.wait)
     stdscr.addstr(3, 41, "%s_%s" % (tradebot.curr[0], tradebot.curr[1]))
