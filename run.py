@@ -139,8 +139,6 @@ signal.signal(signal.SIGQUIT, on_exit)
 signal.signal(signal.SIGTERM, on_exit)
 signal.signal(signal.SIGINT, on_exit)
 
-errlog = 'error.log'
-
 config = configparser.ConfigParser()
 config.read('tradebot.conf')
 
@@ -181,10 +179,7 @@ if 'db' in config['MAIN']:
 else:
     args['db'] = 'tradebot.db'
 
-sys.stderr = open(errlog, "w")
-
 tradebot = TradeBot(args)
-
 stdscr = initialize()
 
 while True:
@@ -209,7 +204,9 @@ while True:
         import traceback
         type_, value_, traceback_ = sys.exc_info()
         for line in traceback.format_tb(traceback_):
-            sys.stderr.write(line)
-        sys.stderr.write(e.__class__.__name__ + ": ")
-        sys.stderr.write(e.message)
+            tradebot.log.exception(line)
+            #sys.stderr.write(line)
+        #sys.stderr.write(e.__class__.__name__ + ": ")
+        #sys.stderr.write(e.message)
+        tradebot.log.exception("%s: %s" % (e.__class__.__name__, e.message))
         sys.exit()
