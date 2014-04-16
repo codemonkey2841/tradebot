@@ -12,9 +12,10 @@ import sys
 import time
 from tradebot import TradeBot
 
-def on_exit(sig, func=None):
+def on_exit():
+    """ Revert curses settings on exit """
+
     curses.nocbreak()
-    stdscr.keypad(0)
     curses.echo()
     curses.endwin()
     curses.curs_set(1)
