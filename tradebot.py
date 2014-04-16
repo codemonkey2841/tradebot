@@ -339,6 +339,36 @@ class TradeBot(object):
         price = floor(price * 100000) / 100000.0
         return (state, price)
 
+    def get_boundary(self):
+        """ Retrieve the current fixed boundary value """
+
+        state = self.get_state()[0]
+
+        cursor = self.database.cursor()
+        self.log.debug('SELECT rate FROM orders WHERE pair = %s_%s AND ' \
+            'is_sim = %d AND status != -1 ORDER BY timestamp_created DESC ' \
+            'LIMIT 1 ' % (self.curr[0], self.curr[1],
+            self.simulation))
+        cursor.execute('SELECT rate FROM orders WHERE pair = ? AND ' \
+            'is_sim = ? AND status != -1 ORDER BY timestamp_created DESC ' \
+            'LIMIT 1 ', ('%s_%s' % (self.curr[0], self.curr[1]),
+            '%d' % self.simulation))
+        row = cursor.fetchone()
+        if row != None:
+            price = row[0]
+        else:
+            price = self.average_price()
+
+        if state == 'buy':
+            price -= price * TRADE_FEE
+        elif state == 'sell':
+            price += price * TRADE_FEE
+
+        price = floor(price * 100000) / 100000.0
+
+        return price
+
+
     def get_orders(self):
         """ Retrieve active orders """
         cursor = self.database.cursor()
