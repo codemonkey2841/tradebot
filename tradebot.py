@@ -21,25 +21,15 @@ class TradeBot(object):
     database = None
     log = None
     simulation = False
+    threshold = 0.0
     trade_increment = None
     wait = 15
 
     def __init__(self, args):
-        verbosity = 0
-        if args['verbosity'] == 'DEBUG':
-            verbosity = logging.DEBUG
-        elif args['verbosity'] == 'INFO':
-            verbosity = logging.INFO
-        elif args['verbosity'] == 'WARNING':
-            verbosity = logging.WARNING
-        elif args['verbosity'] == 'ERROR':
-            verbosity = logging.ERROR
-        elif args['verbosity'] == 'CRITICAL':
-            verbosity = logging.CRITICAL
         self.log = logging.getLogger('tradebot')
-        self.log.setLevel(verbosity)
+        self.log.setLevel(args['verbosity'])
         handler = logging.FileHandler(args['logfile'])
-        handler.setLevel(verbosity)
+        handler.setLevel(args['verbosity'])
         formatter = logging.Formatter('%(asctime)s %(message)s')
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
