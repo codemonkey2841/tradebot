@@ -387,6 +387,22 @@ class TradeBot(object):
             self.log.debug(item.timestamp)
             self.insert_trade(item)
 
+    def get_velocity(self):
+        """ Get the current normalized trade velocity """
+
+        cursor = self.database.cursor()
+        cursor.execute('SELECT price, timestamp FROM prices WHERE pair = ?' \
+            'ORDER BY timestamp DESC LIMIT 3', ('%s_%s' % (self.curr[0],
+            self.curr[1]),))
+        result = cursor.fetchall()
+        if len(result) != 3:
+            return 0.0
+        price = result[0][0] - result[2][0]
+        tformat = "%Y-%m-%d %H:%M:%S.%f"
+        time = (datetime.strptime(result[0][1], tformat) -
+                datetime.strptime(result[2][1], tformat))
+        return (price / time.total_seconds())
+
     def get_trade_history(self, count=5):
         """ Get trade history for active pair """
         cursor = self.database.cursor()
