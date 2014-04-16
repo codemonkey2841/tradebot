@@ -38,6 +38,7 @@ class TradeBot(object):
                                   keyhandler.KeyHandler(args['api_file']))
         self.curr = [args['pair'][:3], args['pair'][4:]]
         self.wait = args['wait']
+        self.threshold = args['threshold']
         self.trade_increment = args['trade_increment']
         self.update_balance()
         if args['simulation'] == 'on':
