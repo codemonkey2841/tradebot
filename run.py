@@ -5,7 +5,6 @@
 import configparser
 import curses
 from httplib import HTTPException
-import os
 import signal
 import socket
 from ssl import SSLError
