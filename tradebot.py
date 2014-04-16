@@ -323,7 +323,6 @@ class TradeBot(object):
              'status': 1,
              'timestamp_created': float(datetime.now().strftime("%s"))}
             self.insert_order(trade.OrderItem(-1, info))
-            self.database.commit()
         if self.get_balance(1) <= 0.0:
             state = 'buy'
             price -= price * TRADE_FEE
